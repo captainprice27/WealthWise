@@ -135,6 +135,7 @@ document.querySelectorAll('#chartTenurePills .chart-pill').forEach(btn => {
 });
 
 // Calculate exactly 5 intermediate points between Month 0 and Month N
+// Prefers clean, round integer figures (e.g. 2, 4, 6, 7, 8 for 10y, or 4, 8, 12, 15, 18 for 20y)
 function getFiveIntermediatePoints(N) {
   if (N <= 1) return [];
   if (N <= 5) {
@@ -143,33 +144,91 @@ function getFiveIntermediatePoints(N) {
     return pts;
   }
 
-  // 5 distinct intermediate points dividing N into 6 segments
-  const points = [];
+  // 1. Explicit clean round figures for common investment horizons
+  if (N === 36) { // 3 Years: 6m, 1y, 1.5y, 2y, 2.5y
+    return [6, 12, 18, 24, 30];
+  }
+  if (N === 60) { // 5 Years: 1y, 2y, 3y, 4y, 4.5y
+    return [12, 24, 36, 48, 54];
+  }
+  if (N === 120) { // 10 Years: User specified round integer figures 2, 4, 6, 7, 8
+    return [24, 48, 72, 84, 96]; // 2y, 4y, 6y, 7y, 8y
+  }
+  if (N === 240) { // 20 Years: 4y, 8y, 12y, 15y, 18y
+    return [48, 96, 144, 180, 216]; // 4y, 8y, 12y, 15y, 18y
+  }
+
+  // 2. Generic handling for N >= 72 (6+ years):
+  // Pick 5 distinct whole-year checkpoints strictly between 1 and wholeYears - 1
+  const wholeYears = Math.floor(N / 12);
+  if (wholeYears >= 6) {
+    const targets = [1/6, 2/6, 3/6, 4/6, 5/6];
+    let yearPts = targets.map(r => Math.max(1, Math.min(wholeYears - 1, Math.round(wholeYears * r))));
+    
+    // De-duplicate and ensure strictly ascending
+    for (let i = 0; i < yearPts.length; i++) {
+      if (i > 0 && yearPts[i] <= yearPts[i - 1]) {
+        yearPts[i] = yearPts[i - 1] + 1;
+      }
+    }
+    // Backward shift if pushed past limit
+    for (let i = yearPts.length - 1; i >= 0; i--) {
+      if (yearPts[i] >= wholeYears) {
+        yearPts[i] = wholeYears - 1 - (yearPts.length - 1 - i);
+      }
+    }
+    const finalYearPts = [];
+    let last = 0;
+    for (const yr of yearPts) {
+      if (yr > last && yr < wholeYears) {
+        finalYearPts.push(yr);
+        last = yr;
+      }
+    }
+    if (finalYearPts.length === 5) {
+      return finalYearPts.map(y => y * 12);
+    }
+  }
+
+  // 3. For 2 to 5 years (24 to 71 months): clean 6-month steps
+  if (N >= 24) {
+    const stepMonths = 6;
+    const candidates = [];
+    for (let m = stepMonths; m < N; m += stepMonths) {
+      candidates.push(m);
+    }
+    if (candidates.length >= 5) {
+      const stepIdx = (candidates.length - 1) / 4;
+      const pts = [];
+      for (let k = 0; k < 5; k++) {
+        pts.push(candidates[Math.round(k * stepIdx)]);
+      }
+      return [...new Set(pts)].sort((a, b) => a - b);
+    }
+  }
+
+  // 4. Sub-24 months: pick round months
+  const monthCandidates = [];
+  for (let m = 1; m < N; m++) {
+    monthCandidates.push(m);
+  }
+  if (monthCandidates.length <= 5) {
+    return monthCandidates;
+  }
+  const pts = [];
+  const step = (N - 1) / 6;
   for (let k = 1; k <= 5; k++) {
-    const pt = Math.round((N * k) / 6);
-    if (pt > 0 && pt < N && !points.includes(pt)) {
-      points.push(pt);
-    }
+    pts.push(Math.round(1 + step * k));
   }
-
-  // Ensure 5 distinct points if N is large enough
-  if (points.length < 5 && N >= 6) {
-    points.length = 0;
-    const step = (N - 1) / 6;
-    for (let k = 1; k <= 5; k++) {
-      points.push(Math.round(1 + step * k));
-    }
-  }
-
-  return points.sort((a, b) => a - b);
+  return [...new Set(pts)].sort((a, b) => a - b);
 }
 
 function fmtAxisLabel(m) {
-  if (m === 0) return '0';
+  if (m === 0) return 'Start';
   if (m % 12 === 0) return `${m / 12}y`;
   if (m < 12) return `${m}m`;
   const y = (m / 12);
-  return (y % 1 === 0.5) ? `${y.toFixed(1)}y` : `${y.toFixed(1)}y`;
+  return (y % 1 === 0) ? `${y}y` : (y % 0.5 === 0) ? `${y.toFixed(1)}y` : `${y.toFixed(1)}y`;
 }
 
 // --------------------------------------------------------------------------
@@ -742,9 +801,10 @@ function buildTable(n, activeBoosts) {
     if (s.boost > 0) {
       eventNote = `<span class="table-pill">🎯 +${compact(s.boost)} ${s.boostTags.join(', ')}</span>`;
     } else if (isMaturity) {
-      eventNote = `<span style="font-weight:600;color:var(--accent-a)">🏁 Final Maturity</span>`;
+      eventNote = `<span style="font-weight:700;color:var(--accent-a)">🏁 Final Maturity (${label})</span>`;
     } else {
-      eventNote = `<span style="font-size:11px;color:var(--mut)">Checkpoint ${interPoints.indexOf(m) + 1} of 5</span>`;
+      const cpIndex = interPoints.indexOf(m) + 1;
+      eventNote = `<span style="font-weight:600;font-size:12px;color:var(--accent-green)">Milestone Checkpoint ${cpIndex} of 5 (${label})</span>`;
     }
 
     return `
@@ -761,16 +821,104 @@ function buildTable(n, activeBoosts) {
 }
 
 // --------------------------------------------------------------------------
-// 9. Interactive Canvas Growth Chart with 5 Intermediate Areas
+// 9. Interactive Canvas Growth Chart with Round Checkpoints & Round Y-Axis
 // --------------------------------------------------------------------------
 const cv = $('chart');
 const ctx = cv.getContext('2d');
 let geo = {};
 
+// Canvas rounded rectangle helper
+function roundRect(ctx, x, y, w, h, r) {
+  if (ctx.roundRect) {
+    ctx.roundRect(x, y, w, h, r);
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+}
+
+// Compute clean round Indian rupee tick values (e.g. 50 Lakhs, 1 Cr, 2 Cr, 5 Cr)
+function getNiceRoundYAxis(rawPeak) {
+  if (!rawPeak || rawPeak <= 0 || !isFinite(rawPeak)) {
+    return { maxVal: 100000, ticks: [0, 25000, 50000, 75000, 100000] };
+  }
+
+  // Predefined nice steps for Indian currency
+  const niceSteps = [
+    1000, 2000, 2500, 5000,
+    10000, 20000, 25000, 50000,
+    100000, 200000, 250000, 500000,             // 1L, 2L, 2.5L, 5L
+    1000000, 2000000, 2500000, 5000000,         // 10L, 20L, 25L, 50L (50 Lakhs)
+    10000000, 20000000, 25000000, 50000000,     // 1 Cr, 2 Cr, 2.5 Cr, 5 Cr
+    100000000, 200000000, 250000000, 500000000, // 10 Cr, 20 Cr, 25 Cr, 50 Cr
+    1000000000, 2000000000, 5000000000          // 100 Cr, 200 Cr, 500 Cr
+  ];
+
+  const targetPeak = rawPeak * 1.05; // 5% headroom
+  const targetIntervals = 4;
+  const idealStep = targetPeak / targetIntervals;
+
+  let chosenStep = niceSteps[niceSteps.length - 1];
+  for (let i = 0; i < niceSteps.length; i++) {
+    if (niceSteps[i] >= idealStep) {
+      chosenStep = niceSteps[i];
+      break;
+    }
+  }
+
+  if (idealStep > niceSteps[niceSteps.length - 1]) {
+    const p10 = Math.pow(10, Math.floor(Math.log10(idealStep)));
+    const m = idealStep / p10;
+    const mult = m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10;
+    chosenStep = mult * p10;
+  }
+
+  const numIntervals = Math.max(3, Math.ceil(targetPeak / chosenStep));
+  const maxVal = chosenStep * numIntervals;
+
+  const ticks = [];
+  for (let i = 0; i <= numIntervals; i++) {
+    ticks.push(chosenStep * i);
+  }
+
+  return { maxVal, ticks, step: chosenStep };
+}
+
+// Format clean Indian Rupee values for vertical bar (e.g. 50 Lakhs, 1 Cr, 2 Cr, 5 Cr)
+function fmtRoundYAxis(val) {
+  if (val === 0) return '₹0';
+  if (val >= 10000000) { // 1 Crore+
+    const cr = val / 10000000;
+    return cr % 1 === 0 ? `₹${cr} Cr` : `₹${cr.toFixed(1)} Cr`;
+  }
+  if (val >= 100000) { // 1 Lakh+
+    const l = val / 100000;
+    if (l === 50) return '₹50 Lakhs';
+    if (l === 25) return '₹25 Lakhs';
+    if (l === 10) return '₹10 Lakhs';
+    if (l === 1) return '₹1 Lakh';
+    return l % 1 === 0 ? `₹${l} Lakhs` : `₹${l.toFixed(1)} Lakhs`;
+  }
+  if (val >= 1000) {
+    const k = val / 1000;
+    return k % 1 === 0 ? `₹${k}K` : `₹${k.toFixed(1)}K`;
+  }
+  return '₹' + Math.round(val);
+}
+
 function draw(hover) {
   const dpr = window.devicePixelRatio || 1;
   const W = cv.clientWidth || 600;
-  const H = 320;
+  const H = 340;
   cv.width = W * dpr;
   cv.height = H * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -784,71 +932,85 @@ function draw(hover) {
   const colInvested = isLight ? '#4d6228' : '#6366f1';
   const colGross = isLight ? '#2d6a4f' : '#22d3ee';
   const colReal = isLight ? '#738c47' : '#f59e0b';
-  const colGrid = isLight ? 'rgba(77, 98, 40, 0.1)' : 'rgba(255, 255, 255, 0.07)';
+  const colGrid = isLight ? 'rgba(77, 98, 40, 0.12)' : 'rgba(255, 255, 255, 0.07)';
   const colAxis = isLight ? '#556832' : '#9aa0c3';
-  const colIntermediate = isLight ? 'rgba(77, 98, 40, 0.18)' : 'rgba(255, 255, 255, 0.12)';
+  const colIntermediate = isLight ? 'rgba(77, 98, 40, 0.22)' : 'rgba(255, 255, 255, 0.16)';
 
-  const L = 64, R = 18, T = 16, B = 32;
-  const w = W - L - R, h = H - T - B;
-  const n = series.length - 1;
-
-  // Safe linear scan for maxVal (avoids call stack limit on large arrays)
-  let maxVal = 1;
+  // Safe linear scan for peak value
+  let peakVal = 1;
   for (let i = 0; i < series.length; i++) {
     const s = series[i];
-    if (s.gross > maxVal) maxVal = s.gross;
-    if (s.inv > maxVal) maxVal = s.inv;
+    if (s.gross > peakVal) peakVal = s.gross;
+    if (s.inv > peakVal) peakVal = s.inv;
   }
-  maxVal *= 1.06;
-  if (!isFinite(maxVal) || maxVal <= 0) maxVal = 1;
+  if (!isFinite(peakVal) || peakVal <= 0) peakVal = 1;
+
+  // Compute "Nice Round" Indian Rupee Ticks (e.g. 50 Lakhs, 1 Cr, 2 Cr, 5 Cr)
+  const yAxis = getNiceRoundYAxis(peakVal);
+  const maxVal = yAxis.maxVal;
+
+  const L = 84, R = 24, T = 34, B = 36;
+  const w = W - L - R, h = H - T - B;
+  const n = series.length - 1;
 
   const x = m => L + (m / (n || 1)) * w;
   const y = v => T + h - (v / maxVal) * h;
   geo = { L, w, n, x, y };
 
-  // 1. Horizontal Grid Lines & Y-Axis Labels
-  ctx.font = '500 11px Inter, sans-serif';
+  // 1. Horizontal Grid Lines & Round Y-Axis Labels
+  ctx.font = '600 11.5px Inter, sans-serif';
   ctx.fillStyle = colAxis;
   ctx.strokeStyle = colGrid;
   ctx.lineWidth = 1;
   ctx.textAlign = 'right';
 
-  for (let i = 0; i <= 4; i++) {
-    const valY = maxVal * i / 4;
+  yAxis.ticks.forEach(valY => {
     const yy = y(valY);
-    ctx.beginPath();
-    ctx.moveTo(L, yy);
-    ctx.lineTo(W - R, yy);
-    ctx.stroke();
-    ctx.fillText('₹' + compact(valY), L - 8, yy + 4);
-  }
+    if (yy >= T - 4 && yy <= T + h + 4) {
+      ctx.beginPath();
+      ctx.moveTo(L, yy);
+      ctx.lineTo(W - R, yy);
+      ctx.stroke();
+      ctx.fillText(fmtRoundYAxis(valY), L - 10, yy + 4);
+    }
+  });
 
   // 2. Exactly 5 Intermediate Points & X-Axis Gridlines
   const interPoints = getFiveIntermediatePoints(n);
   const allXPoints = [0, ...interPoints, n];
 
-  ctx.textAlign = 'center';
   allXPoints.forEach((m, idx) => {
     const px = x(m);
+    const isCheckpoint = interPoints.includes(m);
+    const isStartOrEnd = (m === 0 || m === n);
 
     // Subtle vertical guide line for intermediate points
     ctx.beginPath();
     ctx.moveTo(px, T);
     ctx.lineTo(px, T + h);
-    ctx.strokeStyle = (m === 0 || m === n) ? colGrid : colIntermediate;
-    ctx.setLineDash((m === 0 || m === n) ? [] : [2, 3]);
+    ctx.strokeStyle = isStartOrEnd ? colGrid : colIntermediate;
+    ctx.setLineDash(isStartOrEnd ? [] : [3, 3]);
+    ctx.lineWidth = isCheckpoint ? 1.4 : 1;
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Small tick mark at bottom
+    // Tick mark at bottom
     ctx.beginPath();
     ctx.moveTo(px, T + h);
-    ctx.lineTo(px, T + h + 4);
-    ctx.strokeStyle = colAxis;
+    ctx.lineTo(px, T + h + (isCheckpoint ? 6 : 4));
+    ctx.strokeStyle = isCheckpoint ? (isLight ? '#4d6228' : '#22d3ee') : colAxis;
+    ctx.lineWidth = isCheckpoint ? 2 : 1;
     ctx.stroke();
 
-    // X-Axis text label
-    ctx.fillStyle = (idx === 0 || idx === allXPoints.length - 1) ? colAxis : (isLight ? '#354420' : '#d1d5db');
+    // X-Axis text label - larger and prominent for checkpoints!
+    ctx.textAlign = 'center';
+    if (isCheckpoint) {
+      ctx.font = '700 13px Inter, sans-serif';
+      ctx.fillStyle = isLight ? '#2d451e' : '#e0e7ff';
+    } else {
+      ctx.font = '600 11px Inter, sans-serif';
+      ctx.fillStyle = colAxis;
+    }
     ctx.fillText(fmtAxisLabel(m), px, H - 10);
   });
 
@@ -889,7 +1051,61 @@ function draw(hover) {
   drawLine('inv', colInvested, [], 2.4);
   drawLine('real', colReal, [6, 4], 2.2);
 
-  // 5. Markers for Windfall Boosts (in Hybrid mode)
+  // 5. Draw prominent checkpoint badges and values directly on the curve!
+  interPoints.forEach((m, idx) => {
+    const s = series[m];
+    if (!s) return;
+    const px = x(m);
+    const pyGross = y(s.gross);
+    const pyInv = y(s.inv);
+
+    // Invested curve checkpoint dot
+    ctx.beginPath();
+    ctx.arc(px, pyInv, 4, 0, Math.PI * 2);
+    ctx.fillStyle = colInvested;
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Gross curve checkpoint prominent node
+    ctx.beginPath();
+    ctx.arc(px, pyGross, 6.5, 0, Math.PI * 2);
+    ctx.fillStyle = colGross;
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Draw larger round value badge above the checkpoint node
+    const valText = '₹' + compact(s.gross);
+    ctx.font = '700 12px Inter, sans-serif';
+    const textMetrics = ctx.measureText(valText);
+    const badgeW = textMetrics.width + 14;
+    const badgeH = 20;
+    const badgeX = px - badgeW / 2;
+
+    // Position comfortably above the node (or below if too near the top)
+    let badgeY = pyGross - 26;
+    if (badgeY < T + 2) badgeY = pyGross + 12;
+
+    // Badge background pill
+    ctx.fillStyle = isLight ? 'rgba(244, 241, 234, 0.94)' : 'rgba(20, 24, 33, 0.92)';
+    ctx.strokeStyle = isLight ? 'rgba(77, 98, 40, 0.45)' : 'rgba(34, 211, 238, 0.5)';
+    ctx.lineWidth = 1.2;
+
+    ctx.beginPath();
+    roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // Text inside badge
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isLight ? '#1f3310' : '#ffffff';
+    ctx.fillText(valText, px, badgeY + 14);
+  });
+
+  // 6. Markers for Windfall Boosts (in Hybrid mode)
   if (currentMode === 'hybrid') {
     series.forEach(s => {
       if (s.boost > 0) {
@@ -915,7 +1131,7 @@ function draw(hover) {
     });
   }
 
-  // 6. Hover Crosshair & Dots
+  // 7. Hover Crosshair & Dots
   if (hover != null && series[hover]) {
     const s = series[hover];
     const px = x(hover);
