@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WealthWise – SIP, Lumpsum & Step-up Calculator & Return Backtracker</title>
+<meta name="description" content="Advanced SIP, lumpsum, and windfall wealth calculator with customizable 3Y/5Y/10Y/20Y horizons, salary slab vs equity LTCG taxation, and reverse credibility checker.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div>
+
+<main class="container">
+  <nav class="navbar">
+    <span class="brand">Wealth<span class="grad">Wise</span></span>
+    <button id="themeToggle" class="theme-btn" aria-label="Switch theme" title="Switch theme">
+      <span class="theme-icon" id="themeIcon">☀️</span>
+    </button>
+  </nav>
+  <header class="hero">
+    <h1>Plan. Compare. <span class="grad">Verify.</span></h1>
+    <p>Predict future wealth accumulation or backtrack any promised payout to calculate exact annualised returns (XIRR) and verify investment credibility.</p>
+
+    <!-- App Mode Bar: Forward Predictor vs Reverse Backtracker -->
+    <div class="app-mode-bar">
+      <button type="button" class="app-tab active" id="btnModeForward">
+        <span class="tab-icon">📈</span>
+        <div class="tab-meta">
+          <strong>Growth Predictor</strong>
+          <span>Investments + Expected Return → Future Corpus</span>
+        </div>
+      </button>
+      <button type="button" class="app-tab" id="btnModeReverse">
+        <span class="tab-icon">🔍</span>
+        <div class="tab-meta">
+          <strong>Return Backtracker & Credibility Check</strong>
+          <span>Investments + Final Payout → Exact Annual Rate & Reality Check</span>
+        </div>
+      </button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- INPUTS PANEL -->
+    <section class="card inputs" aria-label="Inputs">
+      <div class="inputs-header">
+        <h2 id="inputsTitle">Investment Parameters</h2>
+        <span id="inputsSubtitle" class="hint">Configure your deposit pattern, return rate, and timeline</span>
+      </div>
+
+      <!-- Strategy Toggle: SIP vs Lumpsum vs Hybrid -->
+      <div class="field strategy-field">
+        <label>Investment Strategy</label>
+        <div class="seg mode-seg" id="modeSeg">
+          <button type="button" class="active" data-mode="sip">🚀 SIP Only</button>
+          <button type="button" data-mode="lump">💎 Lumpsum Only</button>
+          <button type="button" data-mode="hybrid">⚡ Hybrid (SIP + Boosts)</button>
+        </div>
+      </div>
+
+      <!-- SIP Controls -->
+      <div id="secSip" class="strategy-section">
+        <div class="field">
+          <label for="sip">Monthly SIP Amount</label>
+          <div class="row">
+            <input type="range" id="sipRange" min="500" max="200000" step="500" value="10000">
+            <div class="num"><span>₹</span><input type="number" id="sip" min="0" value="10000"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="stepup">Annual SIP Step-up</label>
+          <div class="row">
+            <input type="range" id="stepupRange" min="0" max="50" step="1" value="10">
+            <div class="num"><input type="number" id="stepup" min="0" max="100" step="0.5" value="10"><span>%</span></div>
+          </div>
+          <small class="hint">Increases your monthly SIP by this percentage every 12 months.</small>
+        </div>
+
+      </div>
+
+      <!-- Initial Lumpsum Controls -->
+      <div id="secLump" class="strategy-section">
+        <div class="field">
+          <label for="lump" id="lumpLabel">Lumpsum (Invested upfront today)</label>
+          <div class="row">
+            <input type="range" id="lumpRange" min="0" max="10000000" step="10000" value="100000">
+            <div class="num"><span>₹</span><input type="number" id="lump" min="0" value="100000"></div>
+          </div>
+          <small class="hint" id="lumpHint">One-time initial deposit compounding from day 1.</small>
+        </div>
+      </div>
+
+      <!-- Hybrid Windfall / Lumpsum Injections -->
+      <div id="secBoosts" class="strategy-section boosts-panel">
+        <div class="boosts-head">
+          <div>
+            <span class="boosts-title">⚡ In-Between Lumpsum Boosts</span>
+            <small class="hint">Add one-time windfalls (bonuses, asset sales, lottery) at any month while your SIP runs.</small>
+          </div>
+          <button type="button" id="addBoostBtn" class="btn-subtle">+ Add Boost</button>
+        </div>
+        <div id="boostsList" class="boosts-list"></div>
+      </div>
+
+      <!-- Tenure (Vesting Period) with 3Y, 5Y, 10Y, 20Y Presets -->
+      <div class="field">
+        <div class="period-head">
+          <label>Investment Period (Vesting Tenure)</label>
+          <div class="tenure-presets" id="tenurePresets">
+            <button type="button" class="preset-pill" data-years="3">3 Yrs</button>
+            <button type="button" class="preset-pill" data-years="5">5 Yrs</button>
+            <button type="button" class="preset-pill active" data-years="10">10 Yrs</button>
+            <button type="button" class="preset-pill" data-years="20">20 Yrs</button>
+          </div>
+        </div>
+        <div class="row period">
+          <div class="num"><input type="number" id="years" min="0" max="100" step="1" value="10"><span>yrs</span></div>
+          <div class="num"><input type="number" id="months" min="0" max="11" step="1" value="0"><span>mths</span></div>
+        </div>
+        <div class="total-period-row">
+          <span class="sub-lbl">Or total period in months:</span>
+          <div class="num total-num">
+            <input type="number" id="totalMonthsInput" min="1" max="1200" step="1" value="120">
+            <span>months</span>
+          </div>
+        </div>
+        <small class="hint">Connected fields: edit years (0–100) &amp; months (0–11) above, or type total months directly below (e.g. 28 months = 2 yrs 4 mths).</small>
+      </div>
+
+      <!-- FORWARD MODE ONLY: Expected Return Rate -->
+      <div id="fieldExpectedRate" class="field">
+        <label for="rate">Expected Annual Return (p.a., gross)</label>
+        <div class="row">
+          <input type="range" id="rateRange" min="1" max="35" step="0.5" value="12">
+          <div class="num"><input type="number" id="rate" min="0" step="0.1" value="12"><span>%</span></div>
+        </div>
+        <small class="hint">Historical equity index avg: 12% - 14% | Fixed Deposit: ~7%</small>
+      </div>
+
+      <!-- REVERSE MODE ONLY: Target / Promised Maturity Corpus -->
+      <div id="fieldTargetCorpus" class="field hidden">
+        <div class="target-head">
+          <label for="targetCorpus">Expected / Promised Final Payout</label>
+          <span id="targetProfitBadge" class="target-badge">+₹0 (0%)</span>
+        </div>
+        <div class="row">
+          <input type="range" id="targetCorpusRange" min="10000" max="20000000" step="10000" value="2500000">
+          <div class="num"><span>₹</span><input type="number" id="targetCorpus" min="1" value="2500000"></div>
+        </div>
+        <small class="hint">What you are promised to get at maturity. We backtrack this against your cash flows to discover the real annualised return.</small>
+      </div>
+
+      <!-- Inflation Rate -->
+      <div class="field">
+        <label for="inflation">Inflation Rate (p.a.)</label>
+        <div class="row">
+          <input type="range" id="inflationRange" min="0" max="15" step="0.5" value="6">
+          <div class="num"><input type="number" id="inflation" min="0" step="0.1" value="6"><span>%</span></div>
+        </div>
+        <small class="hint">Used to evaluate purchasing power and real return over inflation.</small>
+      </div>
+
+      <!-- ASSET CLASS & TAXATION (FY 2026-27 rules) -->
+      <div class="field tax-section-box">
+        <div class="tax-head">
+          <label>Taxation (FY 2026-27)</label>
+        </div>
+
+        <div class="tax-seg" id="taxAssetSeg">
+          <button type="button" class="active" data-tax-mode="equity">Equity / Equity MFs</button>
+          <button type="button" data-tax-mode="salary">FD / Debt / NSC</button>
+          <button type="button" data-tax-mode="exempt">PPF / EPF / SGB</button>
+          <button type="button" data-tax-mode="custom">Custom rate</button>
+        </div>
+
+        <div id="taxSubEquity" class="tax-sub-panel">
+          <p class="tax-rule">LTCG (held &gt; 12 months): <b>12.5%</b> above ₹1.25 L per year.<br>STCG (held ≤ 12 months): <b>20%</b>.<br>Plus 4% cess. Independent of your salary.</p>
+          <label class="checkbox-label" for="taxExemptionCheck">
+            <input type="checkbox" id="taxExemptionCheck" checked>
+            <span>Use ₹1.25 L LTCG exemption (₹1.25 L × years held)</span>
+          </label>
+        </div>
+
+        <div id="taxSubSalary" class="tax-sub-panel hidden">
+          <label for="taxableIncome">Your annual taxable income (excluding this interest)</label>
+          <div class="row">
+            <div class="num wide"><span>₹</span><input type="number" id="taxableIncome" min="0" step="50000" value="1500000"></div>
+          </div>
+          <p class="tax-rule">New regime slabs: 0–4 L nil · 4–8 L 5% · 8–12 L 10% · 12–16 L 15% · 16–20 L 20% · 20–24 L 25% · above 24 L 30%. Sec 87A rebate up to ₹12 L income, 4% cess. Interest is spread evenly across the years held and taxed on top of your income. Surcharge not included.</p>
+        </div>
+
+        <div id="taxSubExempt" class="tax-sub-panel hidden">
+          <p class="tax-rule">No tax on gains. Covers PPF, EPF (within limits) and SGB held to maturity.</p>
+        </div>
+
+        <div id="taxSubCustom" class="tax-sub-panel hidden">
+          <label for="taxCustom">Tax rate on gains</label>
+          <div class="row">
+            <input type="range" id="taxCustomRange" min="0" max="50" step="0.5" value="20">
+            <div class="num"><input type="number" id="taxCustom" min="0" max="100" step="0.5" value="20"><span>%</span></div>
+          </div>
+        </div>
+
+        <!-- Effective Tax Live Summary Display -->
+        <div class="tax-summary-pill">
+          <span>Effective Tax Rate on Gains:</span>
+          <strong id="effectiveTaxDisplay">12.5% (Equity LTCG)</strong>
+        </div>
+      </div>
+    </section>
+
+    <!-- RESULTS COLUMN -->
+    <section class="results">
+      
+      <!-- ================================================================
+           VIEW A: FORWARD GROWTH PREDICTOR
+           ================================================================ -->
+      <div id="viewForward" class="results-view">
+        <div class="stats">
+          <div class="card stat"><span class="lbl">Total Invested</span><strong id="rInvested">–</strong></div>
+          <div class="card stat"><span class="lbl">Gross Capital Gains</span><strong id="rGains" class="pos">–</strong></div>
+          <div class="card stat hl"><span class="lbl">Final Corpus (Gross)</span><strong id="rGross">–</strong></div>
+          <div class="card stat hl2"><span class="lbl">Final Corpus (Net of Tax)</span><strong id="rNet">–</strong></div>
+        </div>
+
+        <!-- Real Wealth & Inflation Card -->
+        <div class="card real">
+          <div class="real-content">
+            <span class="badge badge-peach-border">Purchasing Power</span>
+            <span class="lbl">Inflation-Adjusted Value (Today's Money)</span>
+            <strong id="rReal">–</strong>
+            <small id="rRealNote"></small>
+          </div>
+          <div class="ring" id="ring"><span id="ringTxt">–</span></div>
+        </div>
+
+        <!-- Annualised Returns (XIRR) -->
+        <div class="card rates">
+          <div class="rates-head">
+            <h3>Annualised Return (XIRR)</h3>
+            <span class="rates-tag">Cash Flow Compounded</span>
+          </div>
+          <div class="ratebox">
+            <div class="rate-item">
+              <span class="lbl">Gross Annualised</span>
+              <strong id="aGross">–</strong>
+              <small class="sub-lbl">Before tax & inflation</small>
+            </div>
+            <div class="rate-item">
+              <span class="lbl">Net Annualised</span>
+              <strong id="aNet">–</strong>
+              <small class="sub-lbl">After tax deduction</small>
+            </div>
+            <div class="rate-item">
+              <span class="lbl">Real Return (Net − Inf)</span>
+              <strong id="aReal">–</strong>
+              <small class="sub-lbl">Actual purchasing growth</small>
+            </div>
+          </div>
+          <small class="hint">Calculated via XIRR from every single installment date. Accurate for arbitrary tenures like 3, 13, or 29 months.</small>
+        </div>
+      </div>
+
+      <!-- ================================================================
+           VIEW B: REVERSE RETURN BACKTRACKER & CREDIBILITY CHECK
+           ================================================================ -->
+      <div id="viewReverse" class="results-view hidden">
+        <!-- Hero Backtracked Return Rate -->
+        <div class="card backtracked-hero">
+          <div class="backtracked-badge-row">
+            <span class="badge badge-peach-border">Backtracked Reality</span>
+            <span id="credibilityBadge" class="credibility-pill pill-green">🟢 Highly Credible</span>
+          </div>
+          <span class="lbl">Backtracked Annualised Return Rate (XIRR)</span>
+          <div class="backtracked-numbers">
+            <div>
+              <strong id="revGrossRate" class="hero-rate">–</strong>
+              <span class="rate-caption">Gross Annualised Rate</span>
+            </div>
+            <div class="sub-rate-box">
+              <div><span class="lbl">Net After Tax</span><strong id="revNetRate">–</strong></div>
+              <div><span class="lbl">Real Over Inflation</span><strong id="revRealRate">–</strong></div>
+              <div><span class="lbl">Capital Multiplier</span><strong id="revMultiplier">–</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Credibility & Investment Feasibility Analysis -->
+        <div class="card credibility-card">
+          <div class="cred-head">
+            <div>
+              <h3>Investment Source Credibility Assessment</h3>
+              <span class="hint">How realistic is this return in the real financial world?</span>
+            </div>
+            <span id="credRiskLevel" class="risk-tag tag-medium">Medium Risk</span>
+          </div>
+          <div class="cred-analysis-box" id="credAnalysisBox">
+            <p id="credAnalysisText">Evaluating...</p>
+          </div>
+          
+          <!-- Benchmark Reality Comparison Grid -->
+          <div class="benchmarks-grid">
+            <div class="bench-item">
+              <span class="bench-name">Fixed Deposit (FD)</span>
+              <strong class="bench-val">6.8% - 7.5%</strong>
+              <small class="bench-risk">Safe • Guaranteed</small>
+            </div>
+            <div class="bench-item">
+              <span class="bench-name">Govt Bonds / PPF</span>
+              <strong class="bench-val">7.1% - 8.2%</strong>
+              <small class="bench-risk">Govt Backed • Safe</small>
+            </div>
+            <div class="bench-item">
+              <span class="bench-name">Nifty 50 Index</span>
+              <strong class="bench-val">12% - 14%</strong>
+              <small class="bench-risk">Equity Benchmark • Market</small>
+            </div>
+            <div class="bench-item bench-item-active">
+              <span class="bench-name">This Scheme Offer</span>
+              <strong id="benchThisVal" class="bench-val">–</strong>
+              <small id="benchThisStatus" class="bench-risk">Backtracked XIRR</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reverse Quick Stats -->
+        <div class="stats">
+          <div class="card stat"><span class="lbl">Total Invested</span><strong id="revInvested">–</strong></div>
+          <div class="card stat"><span class="lbl">Promised Final Payout</span><strong id="revFinal">–</strong></div>
+          <div class="card stat"><span class="lbl">Absolute Gain</span><strong id="revGain" class="pos">–</strong></div>
+          <div class="card stat"><span class="lbl">Real Worth (Today's ₹)</span><strong id="revRealCorpus">–</strong></div>
+        </div>
+      </div>
+
+      <!-- ================================================================
+           SHARED VISUALIZATIONS (Interactive Chart & Milestone Table)
+           ================================================================ -->
+      <div class="card chartcard">
+        <div class="charthead">
+          <div>
+            <div class="chart-title-row">
+              <h3 id="chartTitle">Wealth Accumulation Trajectory</h3>
+              <div class="chart-tenure-pills" id="chartTenurePills">
+                <button type="button" class="chart-pill" data-years="3">3Y</button>
+                <button type="button" class="chart-pill" data-years="5">5Y</button>
+                <button type="button" class="chart-pill active" data-years="10">10Y</button>
+                <button type="button" class="chart-pill" data-years="20">20Y</button>
+              </div>
+            </div>
+            <span id="chartSubtitle" class="chart-subtitle">Projected compounding trajectory with 5 intermediate milestone areas</span>
+          </div>
+          <div class="legend">
+            <span class="leg-item"><i class="leg-dot dot-inv"></i>Invested</span>
+            <span class="leg-item"><i class="leg-dot dot-gross"></i>Gross Value</span>
+            <span class="leg-item"><i class="leg-dot dot-real"></i>Real Purchasing Power</span>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="chart" height="320"></canvas>
+          <div class="tip" id="tip"></div>
+        </div>
+      </div>
+
+      <div class="card tablecard">
+        <div class="tablehead">
+          <div>
+            <h3>Milestone Progression Table</h3>
+            <span class="hint">5 Intermediate milestone checkpoints + maturity & windfalls</span>
+          </div>
+        </div>
+        <div class="tscroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Timeline Checkpoint</th>
+                <th>Monthly SIP</th>
+                <th>Total Invested</th>
+                <th>Gross Value</th>
+                <th>Real Value (Today's ₹)</th>
+                <th>Event / Note</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+  </div>
+  <footer>WealthWise Suite • Advanced Financial Modeling Engine • Supports Arbitrary Vesting, Salary Slab vs Equity LTCG & Reverse Return Credibility Verification</footer>
+</main>
+<script src="script.js"></script>
+</body>
+</html>
